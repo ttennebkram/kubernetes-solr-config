@@ -24,6 +24,10 @@ spec:
         operator: "Equal"
         value: "zookeeper"
         effect: "NoSchedule"
+      volumes:
+      - name: zookeeper-data
+        persistentVolumeClaim:
+          claimName: zookeeper-data
       containers:
       - name: zookeeper
         image: zookeeper:3.9
@@ -39,27 +43,27 @@ spec:
           value: "1"
         - name: ZOO_SERVERS
           value: "server.1=0.0.0.0:2888:3888;2181"
+        volumeMounts:
+        - name: zookeeper-data
+          mountPath: /data
+        - name: zookeeper-data
+          mountPath: /datalog
+          subPath: datalog
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
+            memory: "2Gi"
             cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
         livenessProbe:
-          exec:
-            command:
-            - /bin/bash
-            - -c
-            - "echo ruok | nc localhost 2181 | grep imok"
+          tcpSocket:
+            port: 2181
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
-          exec:
-            command:
-            - /bin/bash
-            - -c
-            - "echo ruok | nc localhost 2181 | grep imok"
+          tcpSocket:
+            port: 2181
           initialDelaySeconds: 20
           periodSeconds: 5
 ---

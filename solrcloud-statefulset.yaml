@@ -1,12 +1,12 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: solrcloud
   namespace: solr-namespace
   labels:
     app: solrcloud
 spec:
-  # Run 2 Solr replicas for high availability
+  serviceName: solrcloud-headless
   replicas: 2
   selector:
     matchLabels:
@@ -23,7 +23,6 @@ spec:
         - containerPort: 8983
           name: solr-port
         env:
-        # Configure SolrCloud to use ZooKeeper
         - name: ZK_HOST
           value: "zookeeper:2181"
         - name: SOLR_HOST
@@ -32,12 +31,14 @@ spec:
               fieldPath: status.podIP
         - name: SOLR_JAVA_MEM
           value: "-Xms2g -Xmx2g"
-        # Use the default docker-entrypoint.sh which handles setup
         args:
         - "solr-foreground"
-        - "-c"  # Cloud mode
+        - "-c"
         - "-z"
         - "zookeeper:2181"
+        volumeMounts:
+        - name: solr-data
+          mountPath: /var/solr/data
         resources:
           requests:
             memory: "6Gi"
@@ -59,6 +60,15 @@ spec:
           initialDelaySeconds: 30
           periodSeconds: 5
           timeoutSeconds: 5
+  # VolumeClaimTemplates automatically create a PVC for each pod
+  volumeClaimTemplates:
+  - metadata:
+      name: solr-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 50Gi
 ---
 apiVersion: v1
 kind: Service
@@ -76,7 +86,6 @@ spec:
     app: solrcloud
   type: ClusterIP
 ---
-# Headless service for SolrCloud pod discovery
 apiVersion: v1
 kind: Service
 metadata:
