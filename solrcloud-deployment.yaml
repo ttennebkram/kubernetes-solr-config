@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: solrcloud
+  namespace: solr-namespace
+  labels:
+    app: solrcloud
+spec:
+  # Run 2 Solr replicas for high availability
+  replicas: 2
+  selector:
+    matchLabels:
+      app: solrcloud
+  template:
+    metadata:
+      labels:
+        app: solrcloud
+    spec:
+      containers:
+      - name: solr
+        image: solr:9.7
+        ports:
+        - containerPort: 8983
+          name: solr-port
+        env:
+        # Configure SolrCloud to use ZooKeeper
+        - name: ZK_HOST
+          value: "zookeeper:2181"
+        - name: SOLR_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: SOLR_JAVA_MEM
+          value: "-Xms512m -Xmx512m"
+        command:
+        - "solr"
+        args:
+        - "-c"  # Cloud mode
+        - "-z"
+        - "zookeeper:2181"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /solr/admin/info/system
+            port: 8983
+          initialDelaySeconds: 45
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /solr/admin/info/system
+            port: 8983
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: solrcloud
+  namespace: solr-namespace
+  labels:
+    app: solrcloud
+spec:
+  ports:
+  - port: 8983
+    targetPort: 8983
+    name: solr-port
+  selector:
+    app: solrcloud
+  type: ClusterIP
+---
+# Headless service for SolrCloud pod discovery
+apiVersion: v1
+kind: Service
+metadata:
+  name: solrcloud-headless
+  namespace: solr-namespace
+  labels:
+    app: solrcloud
+spec:
+  clusterIP: None
+  ports:
+  - port: 8983
+    targetPort: 8983
+    name: solr-port
+  selector:
+    app: solrcloud

@@ -1,0 +1,29 @@
+# Kind cluster configuration for learning Kubernetes
+# This creates a multi-node cluster similar to enterprise setups
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+
+# Define the nodes in our cluster
+nodes:
+  # 1 control plane node - manages the cluster
+  - role: control-plane
+    kubeadmConfigPatches:
+    - |
+      kind: InitConfiguration
+      nodeRegistration:
+        kubeletExtraArgs:
+          node-labels: "ingress-ready=true"
+    # Expose ports for testing web applications later
+    extraPortMappings:
+    - containerPort: 80
+      hostPort: 80
+      protocol: TCP
+    - containerPort: 443
+      hostPort: 443
+      protocol: TCP
+
+  # 3 worker nodes - 1 for ZooKeeper, 2 for Solr replicas
+  - role: worker
+  - role: worker
+  - role: worker
