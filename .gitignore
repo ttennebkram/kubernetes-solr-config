@@ -1,0 +1,23 @@
+# Vim swap files
+*.swp
+*.swo
+*~
+
+# Vim session files
+Session.vim
+.netrwhist
+
+# Other editors
+.vscode/
+.idea/
+*.sublime-*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
