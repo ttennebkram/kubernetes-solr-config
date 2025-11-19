@@ -19,6 +19,25 @@ else
 fi
 echo ""
 
+# Check Docker volumes
+echo "💾 Docker Volumes:"
+echo "   $ docker volume ls | grep solr"
+VOLUMES=$(docker volume ls --format "{{.Name}}" | grep solr)
+if [ -n "$VOLUMES" ]; then
+    echo "   ✅ Docker volumes exist:"
+    for vol in solr-zookeeper-data solr-node-0-data solr-node-1-data; do
+        if docker volume inspect "$vol" > /dev/null 2>&1; then
+            echo "     ✓ $vol"
+        else
+            echo "     ✗ $vol (missing)"
+        fi
+    done
+else
+    echo "   ⚠️  No Solr Docker volumes found"
+    echo "   These will be created automatically when you run ./start-solr-cluster.sh"
+fi
+echo ""
+
 # Check if cluster exists
 echo "🔧 Kind Cluster:"
 echo "   $ kind get clusters"

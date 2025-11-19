@@ -1,0 +1,117 @@
+# PersistentVolumes using hostPath for true data persistence
+# These volumes map to Docker volumes mounted into Kind nodes
+#
+# IMPORTANT: All PVCs must have storageClassName: ""
+# This tells Kubernetes to bind to these manually created PVs instead of
+# trying to dynamically provision new volumes with the default storage class.
+---
+# ZooKeeper PersistentVolume
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: zookeeper-pv
+spec:
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /mnt/data/zookeeper
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: node-role
+          operator: In
+          values:
+          - zookeeper
+---
+# ZooKeeper PersistentVolumeClaim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: zookeeper-data
+  namespace: solr-namespace
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""  # Empty string = bind to manual PV, not dynamic provisioning
+  resources:
+    requests:
+      storage: 10Gi
+  volumeName: zookeeper-pv
+---
+# Solr Node 0 PersistentVolume
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: solr-data-solrcloud-0-pv
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /mnt/data/solr-0
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: node-name
+          operator: In
+          values:
+          - solr-node-1
+---
+# Solr Node 0 PersistentVolumeClaim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: solr-data-solrcloud-0
+  namespace: solr-namespace
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 50Gi
+  volumeName: solr-data-solrcloud-0-pv
+---
+# Solr Node 1 PersistentVolume
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: solr-data-solrcloud-1-pv
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /mnt/data/solr-1
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: node-name
+          operator: In
+          values:
+          - solr-node-2
+---
+# Solr Node 1 PersistentVolumeClaim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: solr-data-solrcloud-1
+  namespace: solr-namespace
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  resources:
+    requests:
+      storage: 50Gi
+  volumeName: solr-data-solrcloud-1-pv

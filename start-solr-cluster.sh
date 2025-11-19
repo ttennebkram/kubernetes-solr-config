@@ -10,8 +10,36 @@ SCRIPT_START=$(date +%s)
 echo "🚀 Starting SolrCloud Kubernetes Cluster..."
 echo ""
 
-# Step 1: Check if Docker is running
-echo "1️⃣  Checking Docker..."
+# Step 1: Create Docker volumes for persistent storage
+echo "1️⃣  Setting up Docker volumes for persistent storage..."
+echo "   $ docker volume inspect solr-zookeeper-data"
+if docker volume inspect solr-zookeeper-data > /dev/null 2>&1; then
+    echo "   ✓ Volume solr-zookeeper-data already exists"
+else
+    echo "   $ docker volume create solr-zookeeper-data"
+    docker volume create solr-zookeeper-data
+fi
+
+echo "   $ docker volume inspect solr-node-0-data"
+if docker volume inspect solr-node-0-data > /dev/null 2>&1; then
+    echo "   ✓ Volume solr-node-0-data already exists"
+else
+    echo "   $ docker volume create solr-node-0-data"
+    docker volume create solr-node-0-data
+fi
+
+echo "   $ docker volume inspect solr-node-1-data"
+if docker volume inspect solr-node-1-data > /dev/null 2>&1; then
+    echo "   ✓ Volume solr-node-1-data already exists"
+else
+    echo "   $ docker volume create solr-node-1-data"
+    docker volume create solr-node-1-data
+fi
+echo "✅ Docker volumes ready"
+echo ""
+
+# Step 2: Check if Docker is running
+echo "2️⃣  Checking Docker..."
 echo "   $ docker info"
 if ! docker info > /dev/null 2>&1; then
     echo "❌ Docker is not running. Please start Docker Desktop first."
@@ -25,8 +53,8 @@ fi
 echo "✅ Docker is running"
 echo ""
 
-# Step 2: Check if cluster exists
-echo "2️⃣  Checking for existing cluster..."
+# Step 3: Check if cluster exists
+echo "3️⃣  Checking for existing cluster..."
 echo "   $ kind get clusters"
 if kind get clusters 2>/dev/null | grep -q "solr-cluster"; then
     echo "✅ Cluster 'solr-cluster' already exists"
@@ -38,8 +66,8 @@ else
 fi
 echo ""
 
-# Step 3: Install metrics server
-echo "3️⃣  Installing metrics server..."
+# Step 4: Install metrics server
+echo "4️⃣  Installing metrics server..."
 echo "   $ kubectl get deployment metrics-server -n kube-system"
 if kubectl get deployment metrics-server -n kube-system > /dev/null 2>&1; then
     echo "✅ Metrics server already installed"
@@ -53,8 +81,8 @@ else
 fi
 echo ""
 
-# Step 4: Create namespace
-echo "4️⃣  Setting up namespace..."
+# Step 5: Create namespace
+echo "5️⃣  Setting up namespace..."
 echo "   $ kubectl get namespace solr-namespace"
 if kubectl get namespace solr-namespace > /dev/null 2>&1; then
     echo "✅ Namespace 'solr-namespace' already exists"
@@ -65,8 +93,8 @@ else
 fi
 echo ""
 
-# Step 5: Label and taint nodes
-echo "5️⃣  Configuring nodes..."
+# Step 6: Label and taint nodes
+echo "6️⃣  Configuring nodes..."
 echo "   $ kubectl label nodes solr-cluster-worker node-role=zookeeper node-name=zookeeper-node --overwrite"
 kubectl label nodes solr-cluster-worker node-role=zookeeper node-name=zookeeper-node --overwrite > /dev/null 2>&1
 echo "   $ kubectl label nodes solr-cluster-worker2 node-name=solr-node-1 --overwrite"
@@ -80,17 +108,17 @@ kubectl taint nodes solr-cluster-worker dedicated=zookeeper:NoSchedule --overwri
 echo "✅ Node labels and taints configured"
 echo ""
 
-# Step 6: Deploy ZooKeeper
-echo "6️⃣  Deploying ZooKeeper..."
-echo "   $ kubectl apply -f persistent-volumes.yaml"
-kubectl apply -f persistent-volumes.yaml
+# Step 7: Deploy ZooKeeper
+echo "7️⃣  Deploying ZooKeeper..."
+echo "   $ kubectl apply -f persistent-volumes-hostpath.yaml"
+kubectl apply -f persistent-volumes-hostpath.yaml
 echo "   $ kubectl apply -f zookeeper-deployment.yaml"
 kubectl apply -f zookeeper-deployment.yaml
 echo "✅ ZooKeeper deployed"
 echo ""
 
-# Step 7: Wait for ZooKeeper to be ready
-echo "7️⃣  Waiting for ZooKeeper to be ready..."
+# Step 8: Wait for ZooKeeper to be ready
+echo "8️⃣  Waiting for ZooKeeper to be ready..."
 echo "   $ kubectl wait --for=condition=ready pod -l app=zookeeper -n solr-namespace --timeout=5s"
 ZK_START=$(date +%s)
 
@@ -110,15 +138,15 @@ while true; do
 done
 echo ""
 
-# Step 8: Deploy SolrCloud
-echo "8️⃣  Deploying SolrCloud StatefulSet..."
+# Step 9: Deploy SolrCloud
+echo "9️⃣  Deploying SolrCloud StatefulSet..."
 echo "   $ kubectl apply -f solrcloud-statefulset.yaml"
 kubectl apply -f solrcloud-statefulset.yaml
 echo "✅ SolrCloud deployed"
 echo ""
 
-# Step 9: Wait for Solr StatefulSet to be ready
-echo "9️⃣  Waiting for Solr pods to be ready (this may take 1-2 minutes)..."
+# Step 10: Wait for Solr StatefulSet to be ready
+echo "🔟 Waiting for Solr pods to be ready (this may take 1-2 minutes)..."
 echo "   StatefulSets start pods sequentially (solrcloud-0, then solrcloud-1)..."
 echo "   $ kubectl get statefulset solrcloud -n solr-namespace -o jsonpath='{.status.readyReplicas}'"
 SOLR_START=$(date +%s)
@@ -145,8 +173,8 @@ while true; do
 done
 echo ""
 
-# Step 10: Start port forwarding
-echo "🔟 Setting up port forwarding..."
+# Step 11: Start port forwarding
+echo "1️⃣1️⃣ Setting up port forwarding..."
 echo "   Starting port-forward on localhost:8983..."
 echo "   $ kubectl port-forward -n solr-namespace service/solrcloud 8983:8983 --address=0.0.0.0 &"
 echo "   (This will run in the background - use 'pkill -f port-forward' to stop)"

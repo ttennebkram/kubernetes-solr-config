@@ -24,6 +24,18 @@ nodes:
       protocol: TCP
 
   # 3 worker nodes - 1 for ZooKeeper, 2 for Solr replicas
+  # Worker 1: ZooKeeper node with persistent volume
   - role: worker
+    extraMounts:
+    - hostPath: /var/lib/docker/volumes/solr-zookeeper-data/_data
+      containerPath: /mnt/data/zookeeper
+  # Worker 2: Solr node 0 with persistent volume
   - role: worker
+    extraMounts:
+    - hostPath: /var/lib/docker/volumes/solr-node-0-data/_data
+      containerPath: /mnt/data/solr-0
+  # Worker 3: Solr node 1 with persistent volume
   - role: worker
+    extraMounts:
+    - hostPath: /var/lib/docker/volumes/solr-node-1-data/_data
+      containerPath: /mnt/data/solr-1

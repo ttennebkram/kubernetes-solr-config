@@ -35,16 +35,7 @@ echo "   $ kubectl get pods -n solr-namespace"
 kubectl get pods -n solr-namespace 2>/dev/null || echo "   No pods found"
 echo ""
 
-# Step 4: Ask for confirmation
-read -p "⚠️  Delete cluster 'solr-cluster'? Your data will be preserved in Docker volumes. (y/N): " -n 1 -r
-echo ""
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "❌ Shutdown cancelled"
-    exit 0
-fi
-echo ""
-
-# Step 5: Delete the cluster
+# Step 4: Delete the cluster
 echo "4️⃣  Deleting Kind cluster..."
 echo "   This will:"
 echo "   ✓ Stop all pods (Solr, ZooKeeper)"
@@ -64,23 +55,23 @@ echo "   $ docker ps --filter 'name=solr-cluster'"
 docker ps --filter "name=solr-cluster" --format "table {{.Names}}\t{{.Status}}" || echo "   None"
 echo ""
 
-echo "💾 Docker volumes (checking for cluster-related volumes):"
-echo "   $ docker volume ls --filter 'label=io.x-k8s.kind.cluster=solr-cluster'"
-VOLUME_OUTPUT=$(docker volume ls --filter "label=io.x-k8s.kind.cluster=solr-cluster" --format "table {{.Name}}\t{{.Size}}" 2>/dev/null)
-if [ -z "$VOLUME_OUTPUT" ]; then
-    echo "VOLUME NAME   SIZE"
+echo "💾 Docker volumes (persistent storage):"
+echo "   $ docker volume ls | grep solr"
+VOLUMES=$(docker volume ls --format "{{.Name}}" | grep solr)
+if [ -n "$VOLUMES" ]; then
+    echo "   ✅ Persistent storage volumes preserved:"
+    for vol in solr-zookeeper-data solr-node-0-data solr-node-1-data; do
+        if docker volume inspect "$vol" > /dev/null 2>&1; then
+            echo "     ✓ $vol"
+        else
+            echo "     ✗ $vol (not found)"
+        fi
+    done
     echo ""
-    echo "   ℹ️  No separate Docker volumes found (this is normal)."
-    echo "   Kind stores PersistentVolume data inside the cluster node containers."
-    echo "   Your Solr and ZooKeeper data persists in the node filesystem and"
-    echo "   will be automatically restored when you run './start-solr-cluster.sh'"
+    echo "   Your Solr collections and ZooKeeper data are safe in these volumes."
 else
-    echo "$VOLUME_OUTPUT"
-    echo ""
-    echo "   ⚠️  Unexpected: Docker volumes found for this cluster."
-    echo "   This usually means the cluster configuration was modified to use"
-    echo "   Docker volumes instead of Kind's default local-path storage."
-    echo "   These volumes may contain data and should be manually reviewed."
+    echo "   ℹ️  No Solr Docker volumes found."
+    echo "   They will be created when you run './start-solr-cluster.sh'"
 fi
 echo ""
 
@@ -95,8 +86,9 @@ echo "  • A new cluster will be created"
 echo "  • Your persistent volumes will be recreated"
 echo "  • Your Solr data will be restored automatically"
 echo ""
-echo "🗑️  To completely remove everything (including data):"
-echo "   docker volume prune --filter 'label=io.x-k8s.kind.cluster=solr-cluster'"
+echo "🗑️  To completely remove everything (including all data):"
+echo "   docker volume rm solr-zookeeper-data solr-node-0-data solr-node-1-data"
+echo "   ⚠️  WARNING: This will permanently delete all Solr collections and ZooKeeper data!"
 echo ""
 echo "🐳 Docker Desktop status: Running (left running for you)"
 echo ""

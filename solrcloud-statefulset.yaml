@@ -16,6 +16,17 @@ spec:
       labels:
         app: solrcloud
     spec:
+      # Init container to fix volume permissions
+      # Solr runs as user 8983:8983 but hostPath volumes are owned by root
+      initContainers:
+      - name: fix-permissions
+        image: busybox:latest
+        command: ['sh', '-c', 'chown -R 8983:8983 /var/solr && chmod -R 755 /var/solr']
+        volumeMounts:
+        - name: solr-data
+          mountPath: /var/solr
+        securityContext:
+          runAsUser: 0  # Run as root to fix permissions
       containers:
       - name: solr
         image: solr:9.7
@@ -38,7 +49,7 @@ spec:
         - "zookeeper:2181"
         volumeMounts:
         - name: solr-data
-          mountPath: /var/solr/data
+          mountPath: /var/solr
         resources:
           requests:
             memory: "6Gi"

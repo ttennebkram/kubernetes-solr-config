@@ -215,16 +215,24 @@ This configuration creates a multi-node cluster that simulates a real
 production environment better than a single-node cluster.
 
 
-persistent-volumes.yaml
------------------------
-Defines PersistentVolumeClaim for ZooKeeper:
-  - Name: zookeeper-data
-  - Size: 10GB
-  - Access mode: ReadWriteOnce (single node can mount)
-  - Storage class: standard (Kind's default local-path provisioner)
+persistent-volumes-hostpath.yaml
+--------------------------------
+Defines PersistentVolumes and PersistentVolumeClaims using hostPath:
+  - ZooKeeper PV/PVC: 10GB, mounted at /mnt/data/zookeeper
+  - Solr node 0 PV/PVC: 50GB, mounted at /mnt/data/solr-0
+  - Solr node 1 PV/PVC: 50GB, mounted at /mnt/data/solr-1
 
-Note: Solr PVCs are NOT in this file. They are automatically created by
-the StatefulSet using volumeClaimTemplates (see solrcloud-statefulset.yaml).
+Key configuration:
+  - All PVs use hostPath pointing to Docker volume mount points
+  - All PVCs have storageClassName: "" (empty string)
+    * This forces manual binding to pre-created PVs
+    * Prevents dynamic provisioning with default storage class
+  - Node affinity ensures each PV binds to the correct worker node
+  - Each PVC explicitly specifies which PV to bind to using volumeName
+
+IMPORTANT: The storageClassName: "" setting is critical. Without it,
+Kubernetes will try to dynamically provision new volumes instead of binding
+to the manually created PVs, causing pods to fail with "unbound PVC" errors.
 
 
 zookeeper-deployment.yaml
@@ -392,31 +400,56 @@ Data not persisting:
 DATA PERSISTENCE
 ================
 
-How it works:
-- Kind creates Docker volumes for its node containers
-- Kubernetes PersistentVolumes use local-path-provisioner
-- Data is stored at /var/local-path-provisioner/ inside node containers
-- When you delete the cluster (./stop-solr-cluster.sh), node containers are removed
-- BUT the filesystem data is preserved in Kind's storage layer
-- When you recreate the cluster (./start-solr-cluster.sh):
-  * New node containers are created
-  * PVCs are recreated with same names
-  * Data is automatically remapped to the new pods
+This setup uses Docker volumes for true persistent storage, simulating how
+enterprise Kubernetes clusters use external storage systems like NFS, SAN, or
+cloud storage (EBS, Azure Disk, etc.).
 
-What persists:
+How it works:
+- Three Docker volumes are created to hold persistent data:
+  * solr-zookeeper-data - ZooKeeper data and logs
+  * solr-node-0-data - Solr node 0 data (collections, indexes, config)
+  * solr-node-1-data - Solr node 1 data (collections, indexes, config)
+
+- Docker volumes are mounted into Kind worker nodes at startup:
+  * /mnt/data/zookeeper (from solr-zookeeper-data volume)
+  * /mnt/data/solr-0 (from solr-node-0-data volume)
+  * /mnt/data/solr-1 (from solr-node-1-data volume)
+
+- Kubernetes PersistentVolumes use hostPath to reference these mount points
+
+- Docker volumes exist independently of the Kubernetes cluster
+
+- When you delete the cluster (./stop-solr-cluster.sh):
+  * Kubernetes cluster is destroyed
+  * All pods are stopped
+  * Docker volumes remain intact with all data
+
+- When you recreate the cluster (./start-solr-cluster.sh):
+  * Docker volumes are mounted into new Kind nodes
+  * PersistentVolumes reconnect to the same mount points
+  * Your data is automatically restored
+
+What persists across cluster deletion:
   ✓ Solr collections and documents
   ✓ Solr configuration
   ✓ ZooKeeper data
   ✓ All indexed content
+  ✓ Shard assignments and replication
 
 What does NOT persist:
-  ✗ Running processes (they're stopped when cluster is deleted)
+  ✗ Running processes (pods are stopped when cluster is deleted)
   ✗ In-memory caches
+  ✗ Network connections
   ✗ Temporary files
 
-To completely delete all data:
-  docker volume prune --filter 'label=io.x-k8s.kind.cluster=solr-cluster'
-  Warning: This is irreversible!
+View Docker volumes:
+  docker volume ls | grep solr
+
+Inspect a volume:
+  docker volume inspect solr-zookeeper-data
+
+To completely delete all data (WARNING: irreversible!):
+  docker volume rm solr-zookeeper-data solr-node-0-data solr-node-1-data
 
 
 LEARNING RESOURCES
@@ -443,16 +476,16 @@ PROJECT STRUCTURE
 =================
 
 k8s-kubernetes/
-├── README.txt                      (this file)
+├── README.txt                          (this file)
 ├── .claude/
-│   └── preferences.md              (Claude Code configuration)
-├── kind-cluster-config.yaml        (Cluster definition)
-├── persistent-volumes.yaml         (ZooKeeper PVC)
-├── zookeeper-deployment.yaml       (ZooKeeper deployment + service)
-├── solrcloud-statefulset.yaml      (Solr StatefulSet + services)
-├── start-solr-cluster.sh           (Startup automation)
-├── stop-solr-cluster.sh            (Shutdown automation)
-└── solr-cluster-status.sh          (Status checker)
+│   └── preferences.md                  (Claude Code configuration)
+├── kind-cluster-config.yaml            (Cluster definition with Docker volume mounts)
+├── persistent-volumes-hostpath.yaml    (PVs and PVCs for all persistent storage)
+├── zookeeper-deployment.yaml           (ZooKeeper deployment + service)
+├── solrcloud-statefulset.yaml          (Solr StatefulSet + services)
+├── start-solr-cluster.sh               (Startup automation)
+├── stop-solr-cluster.sh                (Shutdown automation)
+└── solr-cluster-status.sh              (Status checker)
 
 
 NEXT STEPS
