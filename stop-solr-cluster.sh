@@ -9,7 +9,9 @@ echo ""
 
 # Step 1: Stop port forwarding
 echo "1️⃣  Stopping port forwarding..."
+echo "   $ pgrep -f 'kubectl port-forward.*solrcloud'"
 if pgrep -f "kubectl port-forward.*solrcloud" > /dev/null; then
+    echo "   $ pkill -f 'kubectl port-forward.*solrcloud'"
     pkill -f "kubectl port-forward.*solrcloud" || true
     echo "✅ Port forwarding stopped"
 else
@@ -19,6 +21,7 @@ echo ""
 
 # Step 2: Check if cluster exists
 echo "2️⃣  Checking for cluster..."
+echo "   $ kind get clusters"
 if ! kind get clusters 2>/dev/null | grep -q "solr-cluster"; then
     echo "ℹ️  Cluster 'solr-cluster' not found. Nothing to stop."
     exit 0
@@ -28,6 +31,7 @@ echo ""
 
 # Step 3: Show current status before shutdown
 echo "3️⃣  Current cluster status:"
+echo "   $ kubectl get pods -n solr-namespace"
 kubectl get pods -n solr-namespace 2>/dev/null || echo "   No pods found"
 echo ""
 
@@ -47,6 +51,7 @@ echo "   ✓ Stop all pods (Solr, ZooKeeper)"
 echo "   ✓ Remove the cluster"
 echo "   ✓ Preserve persistent volumes (your data is safe!)"
 echo ""
+echo "   $ kind delete cluster --name solr-cluster"
 kind delete cluster --name solr-cluster
 echo "✅ Cluster deleted"
 echo ""
@@ -55,10 +60,12 @@ echo ""
 echo "5️⃣  Checking Docker resources..."
 echo ""
 echo "📦 Docker containers (should be empty for this cluster):"
+echo "   $ docker ps --filter 'name=solr-cluster'"
 docker ps --filter "name=solr-cluster" --format "table {{.Names}}\t{{.Status}}" || echo "   None"
 echo ""
 
 echo "💾 Docker volumes (checking for cluster-related volumes):"
+echo "   $ docker volume ls --filter 'label=io.x-k8s.kind.cluster=solr-cluster'"
 VOLUME_OUTPUT=$(docker volume ls --filter "label=io.x-k8s.kind.cluster=solr-cluster" --format "table {{.Name}}\t{{.Size}}" 2>/dev/null)
 if [ -z "$VOLUME_OUTPUT" ]; then
     echo "VOLUME NAME   SIZE"

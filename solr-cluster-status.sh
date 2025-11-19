@@ -8,6 +8,7 @@ echo ""
 
 # Check if Docker is running
 echo "🐳 Docker Status:"
+echo "   $ docker info"
 if docker info > /dev/null 2>&1; then
     echo "   ✅ Docker is running"
 else
@@ -20,12 +21,14 @@ echo ""
 
 # Check if cluster exists
 echo "🔧 Kind Cluster:"
+echo "   $ kind get clusters"
 if kind get clusters 2>/dev/null | grep -q "solr-cluster"; then
     echo "   ✅ Cluster 'solr-cluster' exists"
 
     # Get cluster info
     echo ""
     echo "   Cluster nodes:"
+    echo "   $ kubectl get nodes -o wide"
     kubectl get nodes -o wide 2>/dev/null || echo "   ⚠️  Cannot connect to cluster"
 else
     echo "   ❌ Cluster 'solr-cluster' not found"
@@ -37,6 +40,7 @@ echo ""
 
 # Check namespace
 echo "📦 Namespace:"
+echo "   $ kubectl get namespace solr-namespace"
 if kubectl get namespace solr-namespace > /dev/null 2>&1; then
     echo "   ✅ Namespace 'solr-namespace' exists"
 else
@@ -46,11 +50,14 @@ echo ""
 
 # Node labels and taints
 echo "🏷️  Node Labels and Taints:"
+echo "   $ kubectl get nodes -o name"
 echo ""
 for node in $(kubectl get nodes -o name 2>/dev/null | sed 's|node/||'); do
     echo "   Node: $node"
+    echo "   $ kubectl get node $node -o jsonpath='{.metadata.labels}'"
     echo "   Labels:"
     kubectl get node "$node" -o jsonpath='{range .metadata.labels}{@}{"\n"}{end}' 2>/dev/null | grep -E "(node-role|node-name)" | sed 's/^/     - /' || echo "     (none relevant)"
+    echo "   $ kubectl get node $node -o jsonpath='{.spec.taints}'"
     echo "   Taints:"
     TAINTS=$(kubectl get node "$node" -o jsonpath='{.spec.taints}' 2>/dev/null)
     if [ -z "$TAINTS" ] || [ "$TAINTS" = "null" ]; then
@@ -63,12 +70,14 @@ done
 
 # Pod status
 echo "🚀 Pods:"
+echo "   $ kubectl get pods -n solr-namespace -o wide"
 if kubectl get pods -n solr-namespace > /dev/null 2>&1; then
     kubectl get pods -n solr-namespace -o wide
     echo ""
 
     # Show which pods are on which nodes
     echo "   Pod to Node mapping:"
+    echo "   $ kubectl get pods -n solr-namespace -o custom-columns=POD:.metadata.name,NODE:.spec.nodeName,STATUS:.status.phase --no-headers"
     kubectl get pods -n solr-namespace -o custom-columns=POD:.metadata.name,NODE:.spec.nodeName,STATUS:.status.phase --no-headers 2>/dev/null | sed 's/^/     /'
 else
     echo "   ❌ No pods found in solr-namespace"
@@ -77,13 +86,20 @@ echo ""
 
 # Persistent volumes
 echo "💾 Persistent Volumes:"
+echo "   $ kubectl get pvc -n solr-namespace"
 if kubectl get pvc -n solr-namespace > /dev/null 2>&1; then
     kubectl get pvc -n solr-namespace
     echo ""
 
     # Show PV details
     echo "   PersistentVolume details:"
+    echo "   $ kubectl get pvc -n solr-namespace -o name"
+    FIRST_PVC=true
     for pvc in $(kubectl get pvc -n solr-namespace -o name 2>/dev/null | sed 's|persistentvolumeclaim/||'); do
+        if [ "$FIRST_PVC" = true ]; then
+            echo "   $ kubectl get pvc $pvc -n solr-namespace -o jsonpath='{.spec.volumeName}'"
+            FIRST_PVC=false
+        fi
         PV=$(kubectl get pvc "$pvc" -n solr-namespace -o jsonpath='{.spec.volumeName}' 2>/dev/null)
         SIZE=$(kubectl get pvc "$pvc" -n solr-namespace -o jsonpath='{.spec.resources.requests.storage}' 2>/dev/null)
         STATUS=$(kubectl get pvc "$pvc" -n solr-namespace -o jsonpath='{.status.phase}' 2>/dev/null)
@@ -96,6 +112,7 @@ echo ""
 
 # Services
 echo "🌐 Services:"
+echo "   $ kubectl get svc -n solr-namespace"
 if kubectl get svc -n solr-namespace > /dev/null 2>&1; then
     kubectl get svc -n solr-namespace
 else
@@ -105,6 +122,7 @@ echo ""
 
 # Port forwarding status
 echo "🔌 Port Forwarding:"
+echo "   $ pgrep -f 'kubectl port-forward.*solrcloud'"
 if pgrep -f "kubectl port-forward.*solrcloud" > /dev/null; then
     echo "   ✅ Port forwarding is active on localhost:8983"
     PF_PID=$(pgrep -f "kubectl port-forward.*solrcloud")
@@ -117,11 +135,13 @@ echo ""
 
 # Resource usage (if metrics-server is available)
 echo "📈 Resource Usage:"
+echo "   $ kubectl top nodes"
 if kubectl top nodes > /dev/null 2>&1; then
     echo "   Node usage:"
     kubectl top nodes | sed 's/^/     /'
     echo ""
     echo "   Pod usage:"
+    echo "   $ kubectl top pods -n solr-namespace"
     kubectl top pods -n solr-namespace 2>/dev/null | sed 's/^/     /' || echo "     No pod metrics available yet"
 else
     echo "   ℹ️  Metrics server not available"
@@ -131,7 +151,9 @@ echo ""
 
 # Quick health check
 echo "🏥 Health Check:"
+echo "   $ kubectl get pods -n solr-namespace -l app=zookeeper -o jsonpath='{.items[0].status.conditions[?(@.type==\"Ready\")].status}'"
 ZK_READY=$(kubectl get pods -n solr-namespace -l app=zookeeper -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null)
+echo "   $ kubectl get statefulset solrcloud -n solr-namespace -o jsonpath='{.status.readyReplicas}'"
 SOLR_READY=$(kubectl get statefulset solrcloud -n solr-namespace -o jsonpath='{.status.readyReplicas}' 2>/dev/null)
 SOLR_DESIRED=$(kubectl get statefulset solrcloud -n solr-namespace -o jsonpath='{.spec.replicas}' 2>/dev/null)
 
