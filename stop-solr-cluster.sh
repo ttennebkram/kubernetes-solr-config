@@ -58,8 +58,23 @@ echo "📦 Docker containers (should be empty for this cluster):"
 docker ps --filter "name=solr-cluster" --format "table {{.Names}}\t{{.Status}}" || echo "   None"
 echo ""
 
-echo "💾 Docker volumes (your data is preserved here):"
-docker volume ls --filter "label=io.x-k8s.kind.cluster=solr-cluster" --format "table {{.Name}}\t{{.Size}}" 2>/dev/null || echo "   Run 'docker volume ls' to see all volumes"
+echo "💾 Docker volumes (checking for cluster-related volumes):"
+VOLUME_OUTPUT=$(docker volume ls --filter "label=io.x-k8s.kind.cluster=solr-cluster" --format "table {{.Name}}\t{{.Size}}" 2>/dev/null)
+if [ -z "$VOLUME_OUTPUT" ]; then
+    echo "VOLUME NAME   SIZE"
+    echo ""
+    echo "   ℹ️  No separate Docker volumes found (this is normal)."
+    echo "   Kind stores PersistentVolume data inside the cluster node containers."
+    echo "   Your Solr and ZooKeeper data persists in the node filesystem and"
+    echo "   will be automatically restored when you run './start-solr-cluster.sh'"
+else
+    echo "$VOLUME_OUTPUT"
+    echo ""
+    echo "   ⚠️  Unexpected: Docker volumes found for this cluster."
+    echo "   This usually means the cluster configuration was modified to use"
+    echo "   Docker volumes instead of Kind's default local-path storage."
+    echo "   These volumes may contain data and should be manually reviewed."
+fi
 echo ""
 
 # Step 7: Show cleanup options

@@ -4,6 +4,9 @@
 
 set -e  # Exit on error
 
+# Track total startup time
+SCRIPT_START=$(date +%s)
+
 echo "🚀 Starting SolrCloud Kubernetes Cluster..."
 echo ""
 
@@ -44,17 +47,13 @@ echo ""
 
 # Step 4: Label and taint nodes
 echo "4️⃣  Configuring nodes..."
-kubectl label nodes solr-cluster-worker node-role=zookeeper node-name=zookeeper-node --overwrite
-kubectl label nodes solr-cluster-worker2 node-name=solr-node-1 --overwrite
-kubectl label nodes solr-cluster-worker3 node-name=solr-node-2 --overwrite
+kubectl label nodes solr-cluster-worker node-role=zookeeper node-name=zookeeper-node --overwrite > /dev/null 2>&1
+kubectl label nodes solr-cluster-worker2 node-name=solr-node-1 --overwrite > /dev/null 2>&1
+kubectl label nodes solr-cluster-worker3 node-name=solr-node-2 --overwrite > /dev/null 2>&1
 
-# Check if taint already exists before applying
-if kubectl get node solr-cluster-worker -o json | grep -q "dedicated=zookeeper:NoSchedule"; then
-    echo "✅ Node taints already configured"
-else
-    kubectl taint nodes solr-cluster-worker dedicated=zookeeper:NoSchedule
-    echo "✅ Node labels and taints configured"
-fi
+# Apply taint (will fail silently if already exists)
+kubectl taint nodes solr-cluster-worker dedicated=zookeeper:NoSchedule --overwrite 2>/dev/null || true
+echo "✅ Node labels and taints configured"
 echo ""
 
 # Step 5: Deploy ZooKeeper
@@ -66,8 +65,21 @@ echo ""
 
 # Step 6: Wait for ZooKeeper to be ready
 echo "6️⃣  Waiting for ZooKeeper to be ready..."
-kubectl wait --for=condition=ready pod -l app=zookeeper -n solr-namespace --timeout=120s
-echo "✅ ZooKeeper is ready"
+ZK_START=$(date +%s)
+
+# Poll for ZooKeeper readiness
+while true; do
+    if kubectl wait --for=condition=ready pod -l app=zookeeper -n solr-namespace --timeout=5s > /dev/null 2>&1; then
+        ZK_END=$(date +%s)
+        ZK_ELAPSED=$((ZK_END - ZK_START))
+        echo "✅ ZooKeeper is ready (took ${ZK_ELAPSED}s)"
+        break
+    fi
+    CURRENT_TIME=$(date +%s)
+    ELAPSED=$((CURRENT_TIME - ZK_START))
+    echo "   ZooKeeper pod starting... (${ELAPSED}s elapsed)"
+    sleep 5
+done
 echo ""
 
 # Step 7: Deploy SolrCloud
@@ -76,10 +88,30 @@ kubectl apply -f solrcloud-statefulset.yaml
 echo "✅ SolrCloud deployed"
 echo ""
 
-# Step 8: Wait for Solr pods to be ready
+# Step 8: Wait for Solr StatefulSet to be ready
 echo "8️⃣  Waiting for Solr pods to be ready (this may take 1-2 minutes)..."
-kubectl wait --for=condition=ready pod -l app=solrcloud -n solr-namespace --timeout=180s
-echo "✅ All Solr pods are ready"
+echo "   StatefulSets start pods sequentially (solrcloud-0, then solrcloud-1)..."
+SOLR_START=$(date +%s)
+
+# Wait for the StatefulSet to have all replicas ready
+DESIRED_REPLICAS=2
+while true; do
+    READY_REPLICAS=$(kubectl get statefulset solrcloud -n solr-namespace -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+    if [ "$READY_REPLICAS" = "$DESIRED_REPLICAS" ]; then
+        SOLR_END=$(date +%s)
+        SOLR_ELAPSED=$((SOLR_END - SOLR_START))
+        echo "✅ All $DESIRED_REPLICAS Solr pods are ready! (took ${SOLR_ELAPSED}s)"
+        break
+    fi
+    CURRENT_TIME=$(date +%s)
+    ELAPSED=$((CURRENT_TIME - SOLR_START))
+    if [ "$READY_REPLICAS" = "0" ] || [ -z "$READY_REPLICAS" ]; then
+        echo "   Some node(s) still pending... (0/$DESIRED_REPLICAS pods ready, ${ELAPSED}s elapsed)"
+    else
+        echo "   Some node(s) still pending... ($READY_REPLICAS/$DESIRED_REPLICAS pods ready, ${ELAPSED}s elapsed)"
+    fi
+    sleep 5
+done
 echo ""
 
 # Step 9: Start port forwarding
@@ -92,7 +124,12 @@ echo "✅ Port forwarding active"
 echo ""
 
 # Final status
+SCRIPT_END=$(date +%s)
+TOTAL_ELAPSED=$((SCRIPT_END - SCRIPT_START))
+
 echo "🎉 SolrCloud cluster is ready!"
+echo ""
+echo "⏱️  Total startup time: ${TOTAL_ELAPSED}s"
 echo ""
 echo "📊 Cluster Status:"
 kubectl get pods -n solr-namespace -o wide

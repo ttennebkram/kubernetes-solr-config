@@ -1,4 +1,5 @@
 # PersistentVolumeClaim for ZooKeeper data
+# Note: Solr PVCs are automatically created by the StatefulSet
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -10,29 +11,3 @@ spec:
   resources:
     requests:
       storage: 10Gi
----
-# PersistentVolumeClaim for Solr node 1
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: solr-data-1
-  namespace: solr-namespace
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 50Gi
----
-# PersistentVolumeClaim for Solr node 2
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: solr-data-2
-  namespace: solr-namespace
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 50Gi
