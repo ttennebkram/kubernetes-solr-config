@@ -16,6 +16,16 @@ Kubernetes patterns including:
 - Health probes and readiness checks
 - Service discovery and networking
 
+WARNING: Although this architecture mirrors a small enterprise setup, this
+configuration has NO SECURITY implemented. There are no passwords, no
+authentication, no authorization, and no HTTPS/TLS encryption. This setup
+is intended ONLY for local learning and development environments. DO NOT
+use this configuration in production, on public networks, or with sensitive
+data. For production deployments, implement proper security including:
+authentication (basic auth, OAuth, etc.), authorization (RBAC), network
+policies, TLS/SSL encryption, secrets management, and regular security
+updates.
+
 CLUSTER ARCHITECTURE
 --------------------
 The cluster consists of:
